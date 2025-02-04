@@ -71,10 +71,11 @@ public class ScriptableDebugger {
                         setBreakPoint(debugClass.getName(),6);
                 }
                 if(event instanceof BreakpointEvent){
-                    controleManuel(event );
+                    controleManuel(event);
                 }
                 if(event instanceof StepEvent){
-                    controleManuel(event );
+                    event.request().disable();;
+                    controleManuel(event);
                 }
                 vm.resume();
             }
@@ -97,18 +98,17 @@ public class ScriptableDebugger {
         }
     }
 
-    public void enableStepRequest(LocatableEvent event ) {
-        StepRequest stepRequest = vm.eventRequestManager().createStepRequest(event.thread(), StepRequest.STEP_MIN, StepRequest.STEP_OVER);
-        stepRequest.enable();
-    }
-
     private void controleManuel(Event event) throws IOException {
-        vm.eventRequestManager().deleteEventRequests(vm.eventRequestManager().stepRequests());
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         String command = reader.readLine();
+        Command commandReceived = null;
         if (command != null && command.trim().equalsIgnoreCase("step")) {
-            enableStepRequest((LocatableEvent) event);
+            commandReceived = new StepCommand();
+        } else if (command != null && command.trim().equalsIgnoreCase("step-over")) {
+            commandReceived = new StepOverCommand();
         }
-
+        if (commandReceived != null){
+            commandReceived.execute(vm, (LocatableEvent) event);
+        }
     }
 }
