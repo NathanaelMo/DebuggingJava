@@ -1,10 +1,8 @@
-package dbg;
+package commandPattern;
 
 import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.StackFrame;
-import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.event.LocatableEvent;
-import com.sun.jdi.request.StepRequest;
 
 public class FrameCommand implements Command {
     private final LocatableEvent event;

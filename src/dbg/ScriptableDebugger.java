@@ -8,7 +8,7 @@ import com.sun.jdi.connect.VMStartException;
 import com.sun.jdi.event.*;
 import com.sun.jdi.request.BreakpointRequest;
 import com.sun.jdi.request.ClassPrepareRequest;
-import com.sun.jdi.request.StepRequest;
+import commandPattern.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -112,6 +112,69 @@ public class ScriptableDebugger {
             commandReceived = new ContinueCommand();
         } else if (command != null && command.trim().equalsIgnoreCase("frame")) {
             commandReceived = new FrameCommand((LocatableEvent) event);
+        } else if (command != null && command.trim().equalsIgnoreCase("temporaries")) {
+            commandReceived = new TemporariesCommand((LocatableEvent) event);
+        } else if (command != null && command.trim().equalsIgnoreCase("stack")) {
+            commandReceived = new StackCommand((LocatableEvent) event);
+        } else if (command != null && command.trim().equalsIgnoreCase("receiver")) {
+            commandReceived = new ReceiverCommand((LocatableEvent) event);
+        } else if (command != null && command.trim().equalsIgnoreCase("sender")) {
+            commandReceived = new SenderCommand((LocatableEvent) event);
+        } else if (command != null && command.trim().equalsIgnoreCase("receiver-variables")) {
+            commandReceived = new ReceiverVariablesCommand((LocatableEvent) event);
+        } else if (command != null && command.trim().equalsIgnoreCase("method")) {
+            commandReceived = new MethodCommand((LocatableEvent) event);
+        } else if (command != null && command.trim().equalsIgnoreCase("arguments")) {
+            commandReceived = new ArgumentsCommand((LocatableEvent) event);
+        } else if (command != null && command.startsWith("print-var(") && command.endsWith(")")) {
+            String varName = command.substring(10, command.length() - 1);
+            commandReceived = new PrintVarCommand((LocatableEvent) event, varName);
+        } else if (command != null && command.startsWith("break(") && command.endsWith(")")) {
+            String args = command.substring(6, command.length() - 1);
+            String[] parts = args.split(",");
+            if (parts.length == 2) {
+                String fileName = parts[0].trim();
+                try {
+                    int lineNumber = Integer.parseInt(parts[1].trim());
+                    commandReceived = new BreakCommand(vm, fileName, lineNumber);
+                } catch (NumberFormatException e) {
+                    System.err.println("Invalid line number format");
+                }
+            } else {
+                System.err.println("Invalid break command format. Use: break(filename, lineNumber)");
+            }
+        } else if (command != null && command.trim().equalsIgnoreCase("breakpoints")) {
+            commandReceived = new BreakpointsCommand(vm);
+        } else if (command != null && command.startsWith("break-once(") && command.endsWith(")")) {
+            String args = command.substring(11, command.length() - 1);
+            String[] parts = args.split(",");
+            if (parts.length == 2) {
+                String fileName = parts[0].trim();
+                try {
+                    int lineNumber = Integer.parseInt(parts[1].trim());
+                    commandReceived = new BreakOnceCommand(vm, fileName, lineNumber);
+                } catch (NumberFormatException e) {
+                    System.err.println("Invalid line number format");
+                }
+            }
+        } else if (command != null && command.startsWith("break-on-count(") && command.endsWith(")")) {
+            String args = command.substring(15, command.length() - 1);
+            String[] parts = args.split(",");
+            if (parts.length == 3) {
+                String fileName = parts[0].trim();
+                try {
+                    int lineNumber = Integer.parseInt(parts[1].trim());
+                    int count = Integer.parseInt(parts[2].trim());
+                    commandReceived = new BreakOnCountCommand(vm, fileName, lineNumber, count);
+                } catch (NumberFormatException e) {
+                    System.err.println("Invalid number format");
+                }
+            } else {
+                System.err.println("Invalid break-on-count command format. Use: break-on-count(filename, lineNumber, count)");
+            }
+        } else if (command != null && command.startsWith("break-before-method-call(") && command.endsWith(")")) {
+            String methodName = command.substring(24, command.length() - 1).trim();
+            commandReceived = new BreakBeforeMethodCallCommand(vm, methodName);
         } else {
             System.out.println("Commande inconnue ! Veuillez recommencer : ");
             controleManuel(event);
