@@ -50,6 +50,10 @@ public class ScriptableDebugger {
             for (Event event : eventSet) {
                 System.out.println(event.toString());
                 vm.resume();
+                if(event instanceof VMDisconnectEvent ) {
+                    System.out.println("===End of program.");
+                    return;
+                }
             }
         }
     }
