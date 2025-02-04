@@ -68,7 +68,9 @@ public class ScriptableDebugger {
                     }
                 }
                 if(event instanceof ClassPrepareEvent ) {
-                        setBreakPoint(debugClass.getName(),6);
+                    setBreakPoint(debugClass.getName(),6);
+                    setBreakPoint(debugClass.getName(),9);
+                    setBreakPoint(debugClass.getName(),11);
                 }
                 if(event instanceof BreakpointEvent){
                     controleManuel(event);
@@ -103,12 +105,19 @@ public class ScriptableDebugger {
         String command = reader.readLine();
         Command commandReceived = null;
         if (command != null && command.trim().equalsIgnoreCase("step")) {
-            commandReceived = new StepCommand();
+            commandReceived = new StepCommand(vm, (LocatableEvent) event);
         } else if (command != null && command.trim().equalsIgnoreCase("step-over")) {
-            commandReceived = new StepOverCommand();
+            commandReceived = new StepOverCommand(vm, (LocatableEvent) event);
+        } else if (command != null && command.trim().equalsIgnoreCase("continue")) {
+            commandReceived = new ContinueCommand();
+        } else if (command != null && command.trim().equalsIgnoreCase("frame")) {
+            commandReceived = new FrameCommand((LocatableEvent) event);
+        } else {
+            System.out.println("Commande inconnue ! Veuillez recommencer : ");
+            controleManuel(event);
         }
         if (commandReceived != null){
-            commandReceived.execute(vm, (LocatableEvent) event);
+            commandReceived.execute();
         }
     }
 }
