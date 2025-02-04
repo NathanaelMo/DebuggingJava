@@ -8,7 +8,9 @@ import com.sun.jdi.connect.VMStartException;
 import com.sun.jdi.event.*;
 import com.sun.jdi.request.BreakpointRequest;
 import com.sun.jdi.request.ClassPrepareRequest;
+import com.sun.jdi.request.StepRequest;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -49,10 +51,11 @@ public class ScriptableDebugger {
         }
     }
 
-    public void startDebugger() throws VMDisconnectedException, InterruptedException, AbsentInformationException {
+    public void startDebugger() throws VMDisconnectedException, InterruptedException, AbsentInformationException, IOException {
         EventSet eventSet = null;
         while ((eventSet = vm.eventQueue().remove()) != null) {
             for (Event event : eventSet) {
+                System.out.println(event.toString());
                 if(event instanceof VMDisconnectEvent ) {
                     System.out.println("End of program.");
                     InputStreamReader reader = new InputStreamReader(vm.process().getInputStream());
@@ -67,7 +70,12 @@ public class ScriptableDebugger {
                 if(event instanceof ClassPrepareEvent ) {
                         setBreakPoint(debugClass.getName(),6);
                 }
-                System.out.println(event.toString());
+                if(event instanceof BreakpointEvent){
+                    controleManuel(event );
+                }
+                if(event instanceof StepEvent){
+                    controleManuel(event );
+                }
                 vm.resume();
             }
         }
@@ -82,10 +90,25 @@ public class ScriptableDebugger {
     public void setBreakPoint(String className, int lineNumber) throws AbsentInformationException {
         for (ReferenceType targetClass : vm.allClasses()) {
             if (targetClass.name().equals(className)) {
-                Location location = targetClass.locationsOfLine(lineNumber).getFirst();
+                Location location = targetClass.locationsOfLine(lineNumber).get(0);
                 BreakpointRequest bpReq = vm.eventRequestManager().createBreakpointRequest(location);
                 bpReq.enable();
             }
         }
+    }
+
+    public void enableStepRequest(LocatableEvent event ) {
+        StepRequest stepRequest = vm.eventRequestManager().createStepRequest(event.thread(), StepRequest.STEP_MIN, StepRequest.STEP_OVER);
+        stepRequest.enable();
+    }
+
+    private void controleManuel(Event event) throws IOException {
+        vm.eventRequestManager().deleteEventRequests(vm.eventRequestManager().stepRequests());
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        String command = reader.readLine();
+        if (command != null && command.trim().equalsIgnoreCase("step")) {
+            enableStepRequest((LocatableEvent) event);
+        }
+
     }
 }
