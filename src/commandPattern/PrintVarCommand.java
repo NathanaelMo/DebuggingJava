@@ -16,21 +16,19 @@ public class PrintVarCommand implements Command {
 
     @Override
     public void execute() {
+        StackFrame currentFrame = null;
         try {
-            // Récupérer la frame courante
-            StackFrame currentFrame = event.thread().frame(0);
-
-            // Rechercher d'abord dans les variables locales
+            currentFrame = event.thread().frame(0);
             List<LocalVariable> localVars = currentFrame.visibleVariables();
             for (LocalVariable var : localVars) {
                 if (var.name().equals(varName)) {
                     Value value = currentFrame.getValue(var);
-                    System.out.println("Local variable " + varName + " → " + value);
+                    System.out.println("variable " + varName + " → " + value);
                     return;
                 }
             }
 
-            // Si pas trouvé dans les variables locales, chercher dans les variables d'instance
+
             ObjectReference thisObject = currentFrame.thisObject();
             if (thisObject != null) {
                 ReferenceType type = thisObject.referenceType();
@@ -38,20 +36,17 @@ public class PrintVarCommand implements Command {
                 for (Field field : fields) {
                     if (field.name().equals(varName)) {
                         Value value = thisObject.getValue(field);
-                        System.out.println("Instance variable " + varName + " → " + value);
+                        System.out.println("Variable " + varName + " → " + value);
                         return;
                     }
                 }
             }
 
-            System.out.println("Variable '" + varName + "' not found");
-
-        } catch (IncompatibleThreadStateException e) {
-            System.err.println("Error: Thread not suspended");
-        } catch (AbsentInformationException e) {
-            System.err.println("Error: Debug information not available");
-        } catch (Exception e) {
-            System.err.println("Error getting variable value: " + e.getMessage());
+            System.out.println("Variable '" + varName + "' non trouvée");
+        } catch (IncompatibleThreadStateException | AbsentInformationException e) {
+            throw new RuntimeException(e);
         }
+
+
     }
 }

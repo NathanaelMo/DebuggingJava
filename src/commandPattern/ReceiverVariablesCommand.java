@@ -15,40 +15,29 @@ public class ReceiverVariablesCommand implements Command {
 
     @Override
     public void execute() {
+        StackFrame currentFrame = null;
         try {
-            // Récupérer la frame courante
-            StackFrame currentFrame = event.thread().frame(0);
+            currentFrame = event.thread().frame(0);
             ObjectReference receiver = currentFrame.thisObject();
-
             if (receiver != null) {
-                // Récupérer le type du receveur
                 ReferenceType type = receiver.referenceType();
-
-                // Récupérer tous les champs visibles
                 List<Field> fields = type.allFields();
-
                 if (!fields.isEmpty()) {
-                    System.out.println("Instance variables of current receiver:");
-                    // Récupérer les valeurs de tous les champs
+                    System.out.println("Variables du receiver : ");
                     Map<Field, Value> values = receiver.getValues(fields);
-
-                    // Afficher chaque variable et sa valeur
                     for (Map.Entry<Field, Value> entry : values.entrySet()) {
                         Field field = entry.getKey();
                         Value value = entry.getValue();
                         System.out.println(field.name() + " → " + value);
                     }
                 } else {
-                    System.out.println("No instance variables found");
+                    System.out.println("Pas de variables trouvées");
                 }
             } else {
-                System.out.println("No receiver available (probably in a static method)");
+                System.out.println("Pas de receiver");
             }
-
         } catch (IncompatibleThreadStateException e) {
-            System.err.println("Error: Thread not suspended");
-        } catch (Exception e) {
-            System.err.println("Error getting receiver variables: " + e.getMessage());
+            throw new RuntimeException(e);
         }
     }
 }

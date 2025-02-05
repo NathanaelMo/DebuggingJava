@@ -14,28 +14,24 @@ public class TemporariesCommand implements Command {
 
     @Override
     public void execute() {
-        try {
-            // Récupérer la frame courante
-            StackFrame currentFrame = event.thread().frame(0);
 
-            // Récupérer et afficher les variables locales
-            System.out.println("Local variables :");
-            Map<LocalVariable, Value> visibleVariables = currentFrame.getValues(currentFrame.visibleVariables());
+
+        StackFrame frame = null;
+        try {
+            frame = event.thread().frame(0);
+            System.out.println("Les variables :");
+            Map<LocalVariable, Value> visibleVariables = frame.getValues(frame.visibleVariables());
 
             if (visibleVariables.isEmpty()) {
-                System.out.println("pas de local variables");
+                System.out.println("pas de variables");
             } else {
                 for (Map.Entry<LocalVariable, Value> entry : visibleVariables.entrySet()) {
                     System.out.println(entry.getKey().name() + " → " + entry.getValue());
                 }
             }
-
-        } catch (IncompatibleThreadStateException e) {
-            System.err.println("Error: Thread not suspended");
-        } catch (AbsentInformationException e) {
-            System.err.println("Error: Debug information not available");
-        } catch (Exception e) {
-            System.err.println("Error getting local variables: " + e.getMessage());
+        } catch (IncompatibleThreadStateException | AbsentInformationException e) {
+            throw new RuntimeException(e);
         }
+
     }
 }

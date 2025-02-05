@@ -3,6 +3,8 @@ package commandPattern;
 import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.event.LocatableEvent;
+import com.sun.jdi.request.StepRequest;
+import com.sun.jdi.request.EventRequestManager;
 
 public class FrameCommand implements Command {
     private final LocatableEvent event;
@@ -13,20 +15,15 @@ public class FrameCommand implements Command {
 
     @Override
     public void execute() {
+        StackFrame frame = null;
         try {
-            StackFrame currentFrame = event.thread().frame(0);
-
-
-            System.out.println("frame information:");
-            System.out.println("Method: " + currentFrame.location().method());
-            System.out.println("Location: " + currentFrame.location());
-            System.out.println("Code Index: " + currentFrame.location().codeIndex());
-            System.out.println("Line Number: " + currentFrame.location().lineNumber());
-
+            frame = event.thread().frame(0);
+            System.out.println("Frame : " + frame.toString());
         } catch (IncompatibleThreadStateException e) {
-            System.err.println("Error: Thread not suspended");
-        } catch (Exception e) {
-            System.err.println("Error getting frame information: " + e.getMessage());
+            throw new RuntimeException(e);
         }
     }
+
+
+
 }

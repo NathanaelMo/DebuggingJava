@@ -14,28 +14,20 @@ public class StackCommand implements Command {
 
     @Override
     public void execute() {
+        ThreadReference thread = event.thread();
+        List<StackFrame> frames;
         try {
-            ThreadReference thread = event.thread();
-            List<StackFrame> frames = thread.frames();
-
+            frames = thread.frames();
             System.out.println("Appel stack :");
             for (int i = 0; i < frames.size(); i++) {
                 StackFrame frame = frames.get(i);
                 Location location = frame.location();
                 Method method = location.method();
-
-                // Afficher les informations de chaque frame dans la pile
-                System.out.println(String.format("[%d] %s.%s (ligne %d)",
-                        i,
-                        method.declaringType().name(),
-                        method.name(),
-                        location.lineNumber()));
+                System.out.println(i + " " + method.declaringType().name() + "." + method.name() + " ligne " + location.lineNumber());
             }
-
         } catch (IncompatibleThreadStateException e) {
-            System.err.println("Error: Thread not suspended");
-        } catch (Exception e) {
-            System.err.println("Error getting stack information: " + e.getMessage());
+            throw new RuntimeException(e);
         }
+
     }
 }

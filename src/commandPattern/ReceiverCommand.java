@@ -12,25 +12,23 @@ public class ReceiverCommand implements Command {
 
     @Override
     public void execute() {
-        try {
-            // Récupérer la frame courante
-            StackFrame currentFrame = event.thread().frame(0);
 
-            // Récupérer le receveur (this)
-            ObjectReference receiver = currentFrame.thisObject();
+
+        StackFrame frame = null;
+        try {
+            frame = event.thread().frame(0);
+            ObjectReference receiver = frame.thisObject();
 
             if (receiver != null) {
-                System.out.println("Current receiver (this):");
+                System.out.println("Receiver (this):");
                 System.out.println("Type: " + receiver.referenceType().name());
                 System.out.println("Value: " + receiver.toString());
             } else {
-                System.out.println("No receiver available (probably in a static method)");
+                System.out.println("Pas de receiver");
             }
-
         } catch (IncompatibleThreadStateException e) {
-            System.err.println("Error: Thread not suspended");
-        } catch (Exception e) {
-            System.err.println("Error getting receiver: " + e.getMessage());
+            throw new RuntimeException(e);
         }
+
     }
 }

@@ -19,4 +19,10 @@ public class StepCommand implements Command {
         StepRequest stepRequest = vm.eventRequestManager().createStepRequest(event.thread(), StepRequest.STEP_MIN, StepRequest.STEP_OVER);
         stepRequest.enable();
     }
+
+    @Override
+    public boolean resume() {
+        return true;
+    }
+
 }

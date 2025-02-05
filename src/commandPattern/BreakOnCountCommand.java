@@ -23,36 +23,25 @@ public class BreakOnCountCommand implements Command {
 
     @Override
     public void execute() {
-        try {
-            // Parcourir toutes les classes chargées
             List<ReferenceType> classes = vm.allClasses();
-
             for (ReferenceType refType : classes) {
-                if (refType.sourceName().equals(fileName)) {
-                    Location location = refType.locationsOfLine(lineNumber).get(0);
+                try {
+                    if (refType.sourceName().equals(fileName)) {
+                        Location location = refType.locationsOfLine(lineNumber).get(0);
+                        BreakpointRequest breakpointRequest =
+                                vm.eventRequestManager().createBreakpointRequest(location);
 
-                    // Créer le point d'arrêt
-                    BreakpointRequest breakpointRequest =
-                            vm.eventRequestManager().createBreakpointRequest(location);
 
-                    // Ne s'active qu'après avoir été atteint 'count' fois
-                    breakpointRequest.addCountFilter(count);
-                    breakpointRequest.enable();
+                        breakpointRequest.addCountFilter(count);
+                        breakpointRequest.enable();
 
-                    System.out.println("Breakpoint set in " + fileName + " at line " + lineNumber +
-                            " to trigger on " + count + "th hit");
-                    return;
+                        System.out.println("Breakpoint sur " + fileName + " ligne " + lineNumber +
+                                " pour " + count + " fois");
+                        return;
+                    }
+                } catch (AbsentInformationException e) {
+                    throw new RuntimeException(e);
                 }
             }
-
-            System.out.println("Could not set breakpoint: file " + fileName + " not found");
-
-        } catch (AbsentInformationException e) {
-            System.err.println("Error: Source file information not available");
-        } catch (IndexOutOfBoundsException e) {
-            System.err.println("Error: Invalid line number " + lineNumber + " in " + fileName);
-        } catch (Exception e) {
-            System.err.println("Error setting count breakpoint: " + e.getMessage());
-        }
     }
 }

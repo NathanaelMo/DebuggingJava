@@ -10,4 +10,10 @@ public class ContinueCommand implements Command {
     public void execute() {
 
     }
+
+    @Override
+    public boolean resume() {
+        return true;
+    }
+
 }
