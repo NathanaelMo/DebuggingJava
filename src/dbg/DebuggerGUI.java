@@ -16,6 +16,9 @@ public class DebuggerGUI extends JFrame {
 
     public DebuggerGUI() {
         this.commandQueue = new LinkedBlockingQueue<>();
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        setMinimumSize(new Dimension(screenSize.width * 3/4, screenSize.height * 3/4));
+        setPreferredSize(new Dimension(screenSize.width * 3/4, screenSize.height * 3/4));
         setupGUI();
         redirectSystemOut();
     }
@@ -43,9 +46,11 @@ public class DebuggerGUI extends JFrame {
 
     private JPanel createSimpleCommandsPanel() {
         JPanel panel = new JPanel(new FlowLayout());
-        String[] commands = {"step", "step-over", "continue", "frame", "temporaries",
+        String[] commands = {
+                "step", "step-over", "continue", "frame", "temporaries",
                 "stack", "receiver", "sender", "receiver-variables",
-                "method", "arguments", "breakpoints"};
+                "method", "arguments", "breakpoints"
+        };
 
         for (String command : commands) {
             JButton button = new JButton(command);

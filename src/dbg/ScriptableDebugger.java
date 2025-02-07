@@ -23,18 +23,24 @@ public class ScriptableDebugger {
     Class debugClass;
     VirtualMachine vm;
 
+    //Vqariable pour savoir si la vm est démarrée après un stepback
     private boolean isStepBack = false;
 
+    //Location du step precedent
     Location previousLocation;
 
+    //Nombre de commande step ou step-over ou continue
     int nbStep = 0;
 
     private DebuggerGUI gui;
 
+    //numéro pour savoir à quelle endroit de la ligne on est après un stepback
     private long targetCodeIndex = -1;
 
+    //liste des location
     List<Location> list = new ArrayList<>();
 
+    //Configure l'interface
     public void setGUI(DebuggerGUI gui) {
         this.gui = gui;
     }
@@ -86,6 +92,7 @@ public class ScriptableDebugger {
                     }
                 }
                 if (event instanceof BreakpointEvent) {
+                    //Si on arrive au breakpoint après un step-back on lance un evenement de step si on est pas encore au bon endroit dans la ligne
                     if (isStepBack && ((LocatableEvent)event).location().codeIndex() != targetCodeIndex) {
                         // Créer et activer une StepRequest pour avancer jusqu'à la bonne position
                         StepRequest stepRequest = vm.eventRequestManager().createStepRequest(
@@ -99,6 +106,7 @@ public class ScriptableDebugger {
                     }
                 }
                 if (event instanceof StepEvent) {
+                    //Après un step back on step si on est pas encore au bon endroit dans la ligne
                     if (isStepBack && ((LocatableEvent)event).location().codeIndex() != targetCodeIndex) {
                         event.request().enable();
                         vm.resume();
@@ -108,6 +116,7 @@ public class ScriptableDebugger {
                 }
                 if (event instanceof ClassPrepareEvent) {
                     if(isStepBack){
+                        //Après step back on utilise cette méthode
                         setBreakPointStepBack(debugClass.getName());
                     } else {
                         setBreakPoint(debugClass.getName(), 19);
@@ -116,6 +125,7 @@ public class ScriptableDebugger {
                 if (event instanceof BreakpointEvent || event instanceof StepEvent) {
                     Command command = null;
                     boolean resume = false;
+                    //On reste dans la boucle si la commande envoyer n'est pas step step-over ou continue
                     while (!resume) {
                         if (!(event instanceof BreakpointEvent)) {
                             event.request().disable();
@@ -150,6 +160,7 @@ public class ScriptableDebugger {
         }
     }
 
+    //Recupere dans la variable targetCodeIndex l'endroit ou nous etions dans la ligne
     public void setBreakPointStepBack(String className) throws AbsentInformationException {
         for (ReferenceType refType : vm.allClasses()) {
             if (refType.name().equals(className)) {
@@ -162,6 +173,7 @@ public class ScriptableDebugger {
         }
     }
 
+    //Gestionnaire de commande
     private Command controleManuel(Event event) throws IOException {
         isStepBack = false;
         String command = gui.getNextCommand();;
@@ -169,14 +181,17 @@ public class ScriptableDebugger {
 
         if (command != null && command.trim().equalsIgnoreCase("step")) {
             commandReceived = new StepCommand(vm, (LocatableEvent) event);
+            //on ajoute la location dans la variable list avant d'exécuter le step
             list.add(((LocatableEvent) event).location());
             nbStep++;
         } else if (command != null && command.trim().equalsIgnoreCase("step-over")) {
             commandReceived = new StepOverCommand(vm, (LocatableEvent) event);
+            //on ajoute la location dans la variable list avant d'exécuter le step over
             list.add(((LocatableEvent) event).location());
             nbStep++;
         } else if (command != null && command.trim().equalsIgnoreCase("continue")) {
             commandReceived = new ContinueCommand();
+            //on ajoute la location dans la variable list avant d'exécuter le continue
             list.add(((LocatableEvent) event).location());
             nbStep++;
         } else if (command != null && command.trim().equalsIgnoreCase("frame")) {
@@ -235,14 +250,19 @@ public class ScriptableDebugger {
             String methodName = command.substring(25, command.length() - 1).trim();
             commandReceived = new BreakBeforeMethodCallCommand(vm, methodName);
         } else if (command.trim().equalsIgnoreCase("step-back")) {
+            //on vérifie que nbStep est superieur à 0
             if(nbStep > 0) {
+                //on récupere la derniere location de la liste et on initialise previousLocation
                 previousLocation = list.getLast();
+                //on enleve la derniere location de la liste
                 list.removeLast();
+                //On enleve 1 à nbStep
                 nbStep--;
                 try {
+                    //On redemarre la vm
                     vm = connectAndLaunchVM();
                     enableClassPrepareRequest(vm);
-
+                    //on modifie le isStepBack à true
                     isStepBack = true;
                     return new ContinueCommand();
                 } catch (Exception e) {
@@ -253,16 +273,22 @@ public class ScriptableDebugger {
             }
         } else if (command.startsWith("step-back(") && command.endsWith(")")) {
             int n = Integer.parseInt(command.substring(10, command.length() - 1));
+            //on vérifie que n est superieur à 0 et inferieur ou egal à nbStep
             if(n>0 && n <= nbStep){
+                //on récupere la location voulue
                 previousLocation = list.get(list.size() - n);
                 for(int i = 0; i < n;i++){
+                    //On supprime les locations inutiles
                     list.removeLast();
+                    //décrement nbStep
                     nbStep--;
                 }
                 try {
+
+                    //On redemarre la vm
                     vm = connectAndLaunchVM();
                     enableClassPrepareRequest(vm);
-
+                    //on modifie le isStepBack à true
                     isStepBack = true;
                     return new ContinueCommand();
                 } catch (Exception e) {
