@@ -25,17 +25,20 @@ public class ScriptableDebugger {
         LaunchingConnector launchingConnector = Bootstrap.virtualMachineManager().defaultConnector();
         Map<String, Connector.Argument> arguments = launchingConnector.defaultArguments();
         arguments.get("main").setValue(debugClass.getName());
+        // Lancer la VM en mode suspendu pour que le débogueur puisse intervenir
+        if (arguments.containsKey("suspend")) {
+            arguments.get("suspend").setValue("true");
+        }
         VirtualMachine vm = launchingConnector.launch(arguments);
         return vm;
     }
-    public void attachTo(Class debuggeeClass) {
 
+    public void attachTo(Class debuggeeClass) {
         this.debugClass = debuggeeClass;
         try {
             vm = connectAndLaunchVM();
             enableClassPrepareRequest(vm);
             startDebugger();
-
         } catch (IOException e) {
             e.printStackTrace();
         } catch (IllegalConnectorArgumentsException e) {
@@ -45,49 +48,45 @@ public class ScriptableDebugger {
             System.out.println(e.toString());
         } catch (VMDisconnectedException e) {
             System.out.println("Virtual Machine is disconnected: " + e.toString());
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public void startDebugger() throws VMDisconnectedException, InterruptedException, AbsentInformationException, IOException {
-        EventSet eventSet = null;
-        while ((eventSet = vm.eventQueue().remove()) != null) {
+        while (true) {
+            EventSet eventSet = vm.eventQueue().remove();
             for (Event event : eventSet) {
                 System.out.println(event.toString());
-                if(event instanceof VMDisconnectEvent ) {
-                    System.out.println("End of program.");
-                    InputStreamReader reader = new InputStreamReader(vm.process().getInputStream());
-                    OutputStreamWriter writer = new OutputStreamWriter(System.out ) ;
-                    try {
-                        reader.transferTo(writer) ;
-                        writer.flush();
-                    }catch( IOException e ) {
-                        System.out.println("Target VM input stream reading error.");
+                if (event instanceof VMStartEvent) {
+                    // Au démarrage, la VM est suspendue ; on attend une commande avant de reprendre.
+                    System.out.println("VM démarrée. Tapez une commande pour reprendre l'exécution...");
+                    Command command = controleManuel(event);
+                    if (command != null && command.resume()) {
+                        vm.resume();
                     }
-                }
-                if(event instanceof ClassPrepareEvent ) {
-                    setBreakPoint(debugClass.getName(),19);
-                }
-                if(event instanceof BreakpointEvent || event instanceof StepEvent){
-                    Command command = null;
+                } else if (event instanceof ClassPrepareEvent) {
+                    // Dès que la classe est chargée, on place le breakpoint voulu (ici à la ligne 19).
+                    setBreakPoint(debugClass.getName(), 19);
+                    vm.resume();
+                } else if (event instanceof BreakpointEvent || event instanceof StepEvent) {
                     boolean resume = false;
                     while (!resume) {
-                        if(event instanceof StepEvent){
+                        if (event instanceof StepEvent) {
                             event.request().disable();
                         }
-                        command = controleManuel(event);
-                        if(command == null){
-                            resume = false;
-                        } else {
-                            resume = command.resume();
+                        Command command = controleManuel(event);
+                        if (command != null && command.resume()) {
+                            resume = true;
                         }
-
                     }
+                    vm.resume();
+                } else if (event instanceof VMDeathEvent || event instanceof VMDisconnectEvent) {
+                    System.out.println("Fin du programme.");
+                    return;
+                } else {
+                    vm.resume();
                 }
-                vm.resume();
-
             }
         }
     }
@@ -108,8 +107,14 @@ public class ScriptableDebugger {
         }
     }
 
+    /**
+     * Méthode de contrôle manuel.
+     * À l'heure actuelle, elle lit sur System.in (qui pourra être redirigé depuis votre interface).
+     * Vous pouvez par la suite remplacer cette lecture par un mécanisme de communication depuis l'interface graphique.
+     */
     private Command controleManuel(Event event) throws IOException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        System.out.print("Entrez la commande : ");
         String command = reader.readLine();
         Command commandReceived = null;
         if (command != null && command.trim().equalsIgnoreCase("step")) {
@@ -149,7 +154,7 @@ public class ScriptableDebugger {
             }
         } else if (command != null && command.trim().equalsIgnoreCase("breakpoints")) {
             commandReceived = new BreakpointsCommand(vm);
-        }  else if (command != null && command.startsWith("break-once(") && command.endsWith(")")) {
+        } else if (command != null && command.startsWith("break-once(") && command.endsWith(")")) {
             String args = command.substring(11, command.length() - 1);
             String[] parts = args.split(" ");
             if (parts.length == 2) {
@@ -173,11 +178,10 @@ public class ScriptableDebugger {
         } else if (command != null && command.startsWith("break-before-method-call(") && command.endsWith(")")) {
             String methodName = command.substring(25, command.length() - 1).trim();
             commandReceived = new BreakBeforeMethodCallCommand(vm, methodName);
-        }
-        else {
+        } else {
             System.out.println("Commande inconnue ! Veuillez recommencer : ");
         }
-        if (commandReceived != null){
+        if (commandReceived != null) {
             commandReceived.execute();
         }
         return commandReceived;
