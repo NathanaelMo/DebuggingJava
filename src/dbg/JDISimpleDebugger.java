@@ -2,10 +2,12 @@ package dbg;
 
 public class JDISimpleDebugger {
     public static void main(String[] args) throws Exception {
-
+        DebuggerGUI gui = new DebuggerGUI();
         ScriptableDebugger debuggerInstance = new ScriptableDebugger();
-        debuggerInstance.attachTo(Test.class);
+        debuggerInstance.setGUI(gui);
 
+        gui.showGUI();
+        debuggerInstance.attachTo(Test.class);
     }
 }
 

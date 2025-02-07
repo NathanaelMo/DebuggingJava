@@ -33,6 +33,12 @@ public class ScriptableDebugger {
 
     int previousLocation;
 
+    private DebuggerGUI gui;
+
+    public void setGUI(DebuggerGUI gui) {
+        this.gui = gui;
+    }
+
     public VirtualMachine connectAndLaunchVM() throws IOException, IllegalConnectorArgumentsException, VMStartException {
         LaunchingConnector launchingConnector = Bootstrap.virtualMachineManager().defaultConnector();
         Map<String, Connector.Argument> arguments = launchingConnector.defaultArguments();
@@ -90,7 +96,6 @@ public class ScriptableDebugger {
                 if (event instanceof ClassPrepareEvent) {
                     if(isStepBack){
                         setBreakPoint(debugClass.getName(), previousLocation);
-
                     } else {
                         setBreakPoint(debugClass.getName(), 19);
                     }
@@ -138,7 +143,7 @@ public class ScriptableDebugger {
         isStepBack = false;
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-        String command = reader.readLine();
+        String command = gui.getNextCommand();;
         Command commandReceived = null;
 
         if (command != null && command.trim().equalsIgnoreCase("step")) {
@@ -205,9 +210,6 @@ public class ScriptableDebugger {
         } else if (command.trim().equalsIgnoreCase("step-back")) {
                 previousLocation = ((LocatableEvent) event).location().lineNumber() - 1;
                 try {
-                    if (initialBreakpoint != null) {
-                        initialBreakpoint.disable();  // Désactiver le breakpoint initial
-                    }
                     vm = connectAndLaunchVM();
                     enableClassPrepareRequest(vm);
 
@@ -220,9 +222,6 @@ public class ScriptableDebugger {
             int n = Integer.parseInt(command.substring(10, command.length() - 1));
             previousLocation = ((LocatableEvent) event).location().lineNumber() - n;
             try {
-                if (initialBreakpoint != null) {
-                    initialBreakpoint.disable();  // Désactiver le breakpoint initial
-                }
                 vm = connectAndLaunchVM();
                 enableClassPrepareRequest(vm);
 
