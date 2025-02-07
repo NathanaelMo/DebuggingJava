@@ -37,17 +37,20 @@ public class ScriptableDebugger {
         LaunchingConnector launchingConnector = Bootstrap.virtualMachineManager().defaultConnector();
         Map<String, Connector.Argument> arguments = launchingConnector.defaultArguments();
         arguments.get("main").setValue(debugClass.getName());
+        // Lancer la VM en mode suspendu pour que le débogueur puisse intervenir
+        if (arguments.containsKey("suspend")) {
+            arguments.get("suspend").setValue("true");
+        }
         VirtualMachine vm = launchingConnector.launch(arguments);
         return vm;
     }
-    public void attachTo(Class debuggeeClass) {
 
+    public void attachTo(Class debuggeeClass) {
         this.debugClass = debuggeeClass;
         try {
             vm = connectAndLaunchVM();
             enableClassPrepareRequest(vm);
             startDebugger();
-
         } catch (IOException e) {
             e.printStackTrace();
         } catch (IllegalConnectorArgumentsException e) {
@@ -57,8 +60,7 @@ public class ScriptableDebugger {
             System.out.println(e.toString());
         } catch (VMDisconnectedException e) {
             System.out.println("Virtual Machine is disconnected: " + e.toString());
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -109,8 +111,13 @@ public class ScriptableDebugger {
                             resume = command.resume();
                         }
                     }
+                    vm.resume();
+                } else if (event instanceof VMDeathEvent || event instanceof VMDisconnectEvent) {
+                    System.out.println("Fin du programme.");
+                    return;
+                } else {
+                    vm.resume();
                 }
-                vm.resume();
             }
         }
     }
@@ -134,10 +141,16 @@ public class ScriptableDebugger {
         }
     }
 
+    /**
+     * Méthode de contrôle manuel.
+     * À l'heure actuelle, elle lit sur System.in (qui pourra être redirigé depuis votre interface).
+     * Vous pouvez par la suite remplacer cette lecture par un mécanisme de communication depuis l'interface graphique.
+     */
     private Command controleManuel(Event event) throws IOException {
         isStepBack = false;
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        System.out.print("Entrez la commande : ");
         String command = reader.readLine();
         Command commandReceived = null;
 
@@ -178,7 +191,7 @@ public class ScriptableDebugger {
             }
         } else if (command != null && command.trim().equalsIgnoreCase("breakpoints")) {
             commandReceived = new BreakpointsCommand(vm);
-        }  else if (command != null && command.startsWith("break-once(") && command.endsWith(")")) {
+        } else if (command != null && command.startsWith("break-once(") && command.endsWith(")")) {
             String args = command.substring(11, command.length() - 1);
             String[] parts = args.split(" ");
             if (parts.length == 2) {
@@ -234,7 +247,7 @@ public class ScriptableDebugger {
         } else {
             System.out.println("Commande inconnue ! Veuillez recommencer : ");
         }
-        if (commandReceived != null){
+        if (commandReceived != null) {
             commandReceived.execute();
         }
         return commandReceived;
