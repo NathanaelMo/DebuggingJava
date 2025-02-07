@@ -11,12 +11,10 @@ import com.sun.jdi.request.ClassPrepareRequest;
 import com.sun.jdi.request.StepRequest;
 import commandPattern.*;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,15 +23,17 @@ public class ScriptableDebugger {
     Class debugClass;
     VirtualMachine vm;
 
-    private List<Location> executionLocations = new ArrayList<>();
-
     private boolean isStepBack = false;
 
-    private BreakpointRequest initialBreakpoint;
+    Location previousLocation;
 
-    int previousLocation;
+    int nbStep = 0;
 
     private DebuggerGUI gui;
+
+    private long targetCodeIndex = -1;
+
+    List<Location> list = new ArrayList<>();
 
     public void setGUI(DebuggerGUI gui) {
         this.gui = gui;
@@ -74,14 +74,6 @@ public class ScriptableDebugger {
         while ((eventSet = vm.eventQueue().remove()) != null) {
             for (Event event : eventSet) {
                 System.out.println(event.toString());
-
-                if (event instanceof LocatableEvent) {
-                    Location loc = ((LocatableEvent) event).location();
-                    if (!executionLocations.contains(loc)) {
-                        executionLocations.add(loc);
-                    }
-                }
-
                 if (event instanceof VMDisconnectEvent) {
                     System.out.println("End of program.");
                     InputStreamReader reader = new InputStreamReader(vm.process().getInputStream());
@@ -93,9 +85,30 @@ public class ScriptableDebugger {
                         System.out.println("Target VM input stream reading error.");
                     }
                 }
+                if (event instanceof BreakpointEvent) {
+                    if (isStepBack && ((LocatableEvent)event).location().codeIndex() != targetCodeIndex) {
+                        // Créer et activer une StepRequest pour avancer jusqu'à la bonne position
+                        StepRequest stepRequest = vm.eventRequestManager().createStepRequest(
+                                ((BreakpointEvent)event).thread(),
+                                StepRequest.STEP_MIN,
+                                StepRequest.STEP_INTO
+                        );
+                        stepRequest.enable();
+                        vm.resume();
+                        continue;
+                    }
+                }
+                if (event instanceof StepEvent) {
+                    if (isStepBack && ((LocatableEvent)event).location().codeIndex() != targetCodeIndex) {
+                        event.request().enable();
+                        vm.resume();
+                        continue;
+                    }
+                    event.request().disable();
+                }
                 if (event instanceof ClassPrepareEvent) {
                     if(isStepBack){
-                        setBreakPoint(debugClass.getName(), previousLocation);
+                        setBreakPointStepBack(debugClass.getName());
                     } else {
                         setBreakPoint(debugClass.getName(), 19);
                     }
@@ -115,6 +128,7 @@ public class ScriptableDebugger {
                         }
                     }
                 }
+
                 vm.resume();
             }
         }
@@ -131,27 +145,40 @@ public class ScriptableDebugger {
             if (refType.name().equals(className)) {
                 Location location = refType.locationsOfLine(lineNumber).get(0);
                 BreakpointRequest bpReq = vm.eventRequestManager().createBreakpointRequest(location);
-                if (lineNumber == 19) {  // Breakpoint initial
-                    initialBreakpoint = bpReq;
-                }
                 bpReq.enable();
+            }
+        }
+    }
+
+    public void setBreakPointStepBack(String className) throws AbsentInformationException {
+        for (ReferenceType refType : vm.allClasses()) {
+            if (refType.name().equals(className)) {
+                int lineNumber = previousLocation.lineNumber();
+                Location lineLocation = refType.locationsOfLine(lineNumber).get(0);
+                BreakpointRequest bpReq = vm.eventRequestManager().createBreakpointRequest(lineLocation);
+                bpReq.enable();
+                targetCodeIndex = previousLocation.codeIndex();
             }
         }
     }
 
     private Command controleManuel(Event event) throws IOException {
         isStepBack = false;
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         String command = gui.getNextCommand();;
         Command commandReceived = null;
 
         if (command != null && command.trim().equalsIgnoreCase("step")) {
             commandReceived = new StepCommand(vm, (LocatableEvent) event);
+            list.add(((LocatableEvent) event).location());
+            nbStep++;
         } else if (command != null && command.trim().equalsIgnoreCase("step-over")) {
             commandReceived = new StepOverCommand(vm, (LocatableEvent) event);
+            list.add(((LocatableEvent) event).location());
+            nbStep++;
         } else if (command != null && command.trim().equalsIgnoreCase("continue")) {
             commandReceived = new ContinueCommand();
+            list.add(((LocatableEvent) event).location());
+            nbStep++;
         } else if (command != null && command.trim().equalsIgnoreCase("frame")) {
             commandReceived = new FrameCommand((LocatableEvent) event);
         } else if (command != null && command.trim().equalsIgnoreCase("temporaries")) {
@@ -208,7 +235,10 @@ public class ScriptableDebugger {
             String methodName = command.substring(25, command.length() - 1).trim();
             commandReceived = new BreakBeforeMethodCallCommand(vm, methodName);
         } else if (command.trim().equalsIgnoreCase("step-back")) {
-                previousLocation = ((LocatableEvent) event).location().lineNumber() - 1;
+            if(nbStep > 0) {
+                previousLocation = list.getLast();
+                list.removeLast();
+                nbStep--;
                 try {
                     vm = connectAndLaunchVM();
                     enableClassPrepareRequest(vm);
@@ -218,18 +248,30 @@ public class ScriptableDebugger {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+            } else {
+                System.out.println("Nombre incorrect");
+            }
         } else if (command.startsWith("step-back(") && command.endsWith(")")) {
             int n = Integer.parseInt(command.substring(10, command.length() - 1));
-            previousLocation = ((LocatableEvent) event).location().lineNumber() - n;
-            try {
-                vm = connectAndLaunchVM();
-                enableClassPrepareRequest(vm);
+            if(n>0 && n <= nbStep){
+                previousLocation = list.get(list.size() - n);
+                for(int i = 0; i < n;i++){
+                    list.removeLast();
+                    nbStep--;
+                }
+                try {
+                    vm = connectAndLaunchVM();
+                    enableClassPrepareRequest(vm);
 
-                isStepBack = true;
-                return new ContinueCommand();
-            } catch (Exception e) {
-                e.printStackTrace();
+                    isStepBack = true;
+                    return new ContinueCommand();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } else {
+                System.out.println("Nombre incorrect");
             }
+
         } else {
             System.out.println("Commande inconnue ! Veuillez recommencer : ");
         }
