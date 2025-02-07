@@ -31,8 +31,6 @@ public class ScriptableDebugger {
 
     private BreakpointRequest initialBreakpoint;
 
-    private List<Location> executionHistory = new ArrayList<>();
-
     int previousLocation;
 
     public VirtualMachine connectAndLaunchVM() throws IOException, IllegalConnectorArgumentsException, VMStartException {
