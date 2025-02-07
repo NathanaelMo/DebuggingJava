@@ -8,18 +8,32 @@ import com.sun.jdi.connect.VMStartException;
 import com.sun.jdi.event.*;
 import com.sun.jdi.request.BreakpointRequest;
 import com.sun.jdi.request.ClassPrepareRequest;
+import com.sun.jdi.request.StepRequest;
 import commandPattern.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ScriptableDebugger {
 
-    private Class debugClass;
-    private VirtualMachine vm;
+    Class debugClass;
+    VirtualMachine vm;
+
+    private List<Location> executionLocations = new ArrayList<>();
+
+    private boolean isStepBack = false;
+
+    private BreakpointRequest initialBreakpoint;
+
+    private List<Location> executionHistory = new ArrayList<>();
+
+    int previousLocation;
 
     public VirtualMachine connectAndLaunchVM() throws IOException, IllegalConnectorArgumentsException, VMStartException {
         LaunchingConnector launchingConnector = Bootstrap.virtualMachineManager().defaultConnector();
@@ -51,12 +65,20 @@ public class ScriptableDebugger {
         }
     }
 
-    public void startDebugger() throws VMDisconnectedException, InterruptedException, AbsentInformationException, IOException {
+    public void startDebugger() throws Exception {
         EventSet eventSet = null;
         while ((eventSet = vm.eventQueue().remove()) != null) {
             for (Event event : eventSet) {
                 System.out.println(event.toString());
-                if(event instanceof VMDisconnectEvent ) {
+
+                if (event instanceof LocatableEvent) {
+                    Location loc = ((LocatableEvent) event).location();
+                    if (!executionLocations.contains(loc)) {
+                        executionLocations.add(loc);
+                    }
+                }
+
+                if (event instanceof VMDisconnectEvent) {
                     System.out.println("End of program.");
                     InputStreamReader reader = new InputStreamReader(vm.process().getInputStream());
                     OutputStreamWriter writer = new OutputStreamWriter(System.out ) ;
@@ -67,27 +89,30 @@ public class ScriptableDebugger {
                         System.out.println("Target VM input stream reading error.");
                     }
                 }
-                if(event instanceof ClassPrepareEvent ) {
-                    setBreakPoint(debugClass.getName(),19);
+                if (event instanceof ClassPrepareEvent) {
+                    if(isStepBack){
+                        setBreakPoint(debugClass.getName(), previousLocation);
+
+                    } else {
+                        setBreakPoint(debugClass.getName(), 19);
+                    }
                 }
-                if(event instanceof BreakpointEvent || event instanceof StepEvent){
+                if (event instanceof BreakpointEvent || event instanceof StepEvent) {
                     Command command = null;
                     boolean resume = false;
                     while (!resume) {
-                        if(event instanceof StepEvent){
+                        if (!(event instanceof BreakpointEvent)) {
                             event.request().disable();
                         }
                         command = controleManuel(event);
-                        if(command == null){
+                        if (command == null) {
                             resume = false;
                         } else {
                             resume = command.resume();
                         }
-
                     }
                 }
                 vm.resume();
-
             }
         }
     }
@@ -99,19 +124,25 @@ public class ScriptableDebugger {
     }
 
     public void setBreakPoint(String className, int lineNumber) throws AbsentInformationException {
-        for (ReferenceType targetClass : vm.allClasses()) {
-            if (targetClass.name().equals(className)) {
-                Location location = targetClass.locationsOfLine(lineNumber).get(0);
+        for (ReferenceType refType : vm.allClasses()) {
+            if (refType.name().equals(className)) {
+                Location location = refType.locationsOfLine(lineNumber).get(0);
                 BreakpointRequest bpReq = vm.eventRequestManager().createBreakpointRequest(location);
+                if (lineNumber == 19) {  // Breakpoint initial
+                    initialBreakpoint = bpReq;
+                }
                 bpReq.enable();
             }
         }
     }
 
     private Command controleManuel(Event event) throws IOException {
+        isStepBack = false;
+
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         String command = reader.readLine();
         Command commandReceived = null;
+
         if (command != null && command.trim().equalsIgnoreCase("step")) {
             commandReceived = new StepCommand(vm, (LocatableEvent) event);
         } else if (command != null && command.trim().equalsIgnoreCase("step-over")) {
@@ -173,8 +204,36 @@ public class ScriptableDebugger {
         } else if (command != null && command.startsWith("break-before-method-call(") && command.endsWith(")")) {
             String methodName = command.substring(25, command.length() - 1).trim();
             commandReceived = new BreakBeforeMethodCallCommand(vm, methodName);
-        }
-        else {
+        } else if (command.trim().equalsIgnoreCase("step-back")) {
+                previousLocation = ((LocatableEvent) event).location().lineNumber() - 1;
+                try {
+                    if (initialBreakpoint != null) {
+                        initialBreakpoint.disable();  // Désactiver le breakpoint initial
+                    }
+                    vm = connectAndLaunchVM();
+                    enableClassPrepareRequest(vm);
+
+                    isStepBack = true;
+                    return new ContinueCommand();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+        } else if (command.startsWith("step-back(") && command.endsWith(")")) {
+            int n = Integer.parseInt(command.substring(10, command.length() - 1));
+            previousLocation = ((LocatableEvent) event).location().lineNumber() - n;
+            try {
+                if (initialBreakpoint != null) {
+                    initialBreakpoint.disable();  // Désactiver le breakpoint initial
+                }
+                vm = connectAndLaunchVM();
+                enableClassPrepareRequest(vm);
+
+                isStepBack = true;
+                return new ContinueCommand();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
             System.out.println("Commande inconnue ! Veuillez recommencer : ");
         }
         if (commandReceived != null){
